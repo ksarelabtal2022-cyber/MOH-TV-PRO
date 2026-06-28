@@ -23,95 +23,116 @@
             font-family: 'Inter', 'Cairo', sans-serif;
             background-color: var(--bg-primary);
             color: var(--text-primary);
-            margin: 0;
-            padding: 0;
-            min-height: 100vh;
         }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
 
-    <header class="bg-[var(--bg-secondary)] p-4 shadow-md border-b border-white/5">
-        <div class="container mx-auto flex justify-between items-center">
+    <header class="bg-[var(--bg-secondary)] p-4 border-b border-white/5">
+        <div class="container mx-auto flex flex-wrap justify-between items-center gap-4">
             <h1 class="text-xl font-bold text-white flex items-center gap-2">
                 <i class="lucide-tv"></i> MOH TV Pro
             </h1>
+            
+            <div class="flex items-center gap-3 bg-[var(--bg-tertiary)] px-4 py-2 rounded-lg border border-white/10">
+                <i class="lucide-upload text-[var(--accent-purple)]"></i>
+                <label for="playlistFile" class="text-sm font-medium cursor-pointer">اسحب أو اختر ملف البلاي ليست (M3U):</label>
+                <input type="file" id="playlistFile" accept=".m3u,.m3u8" class="text-xs file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-[var(--accent-purple)] file:text-white hover:file:bg-violet-700 cursor-pointer">
+            </div>
         </div>
     </header>
 
-    <main class="flex-grow container mx-auto p-4 md:p-6">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="md:col-span-2 bg-[var(--bg-tertiary)] rounded-xl p-4 border border-white/5">
-                <h2 class="text-lg font-semibold mb-4 text-[var(--text-primary)]">قائمة القنوات المتاحة</h2>
-                <div id="channelsList" class="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    </div>
+    <main class="flex-grow container mx-auto p-4 grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+        <div class="md:col-span-2 bg-[var(--bg-tertiary)] p-4 rounded-xl border border-white/10">
+            <h2 class="text-lg font-semibold mb-4 border-b border-white/10 pb-2">قائمة القنوات المتاحة</h2>
+            <div id="channelsList" class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <p id="emptyNotice" class="text-[var(--text-secondary)] text-sm col-span-full text-center py-8">يرجى رفع ملف البلاي ليست الخاص بك (.m3u) من الخانة أعلاه لعرض القنوات.</p>
             </div>
+        </div>
 
-            <div class="bg-[var(--bg-secondary)] rounded-xl p-4 border border-white/5 h-fit sticky top-4">
-                <h2 class="text-lg font-semibold mb-4 text-[var(--text-primary)]">مشغل البث</h2>
-                <div class="aspect-video bg-black rounded-lg overflow-hidden relative">
-                    <video id="videoPlayer" class="w-full h-full object-contain" controls autoplay playsinline></video>
-                </div>
+        <div class="bg-[var(--bg-secondary)] p-4 rounded-xl border border-white/10 h-fit sticky top-4">
+            <h2 class="text-lg font-semibold mb-4">مشغل البث المباشر</h2>
+            <div class="aspect-video bg-black rounded-lg overflow-hidden relative">
+                <video id="videoPlayer" class="w-full h-full object-contain" controls autoplay playsinline></video>
             </div>
         </div>
     </main>
 
-    <footer class="bg-[var(--bg-secondary)] text-center py-4 border-t border-white/5 mt-auto text-sm text-[var(--text-secondary)]">
+    <footer class="bg-[var(--bg-secondary)] text-center py-4 border-t border-white/10 mt-8 text-sm text-[var(--text-secondary)]">
         تم التصميم بواسطة MOH TV Pro
     </footer>
 
     <script>
-        const STORAGE_KEY = 'mohtv_channels';
-        
-        // --- باقة القنوات الخاصة بك (Playlists) ---
-        const defaultChannels = [
-            {
-                id: "ch_1",
-                name: "القناة الأولى (تجريبية)",
-                url: "https://test-streams.mux.dev/x3636/x3636.m3u8",
-                category: "عامة",
-                logo: "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=100",
-                description: "بث تجريبي للقناة الأولى"
-            },
-            {
-                id: "ch_2",
-                name: "قناة رياضية (تجريبية)",
-                url: "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8",
-                category: "رياضة",
-                logo: "https://images.unsplash.com/photo-1431327151626-96f8c7270f7a?w=100",
-                description: "بث تجريبي للقنوات الرياضية"
-            }
-        ];
-
         let channels = [];
-        
-        function loadChannels() {
-            try {
-                const stored = localStorage.getItem(STORAGE_KEY);
-                if (stored) {
-                    channels = JSON.parse(stored);
-                } else {
-                    channels = [...defaultChannels];
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(channels));
+
+        // دالة تحليل ملف M3U
+        function parseM3U(m3uContent) {
+            const lines = m3uContent.split('\n');
+            const parsedChannels = [];
+            let currentChannel = null;
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                if (line.startsWith('#EXTINF:')) {
+                    currentChannel = {};
+                    // استخراج الشعار (Logo)
+                    const logoMatch = line.match(/tvg-logo="([^"]+)"/);
+                    currentChannel.logo = logoMatch ? logoMatch[1] : 'https://via.placeholder.com/150/161624/ffffff?text=MOH+TV';
+
+                    // استخراج اسم القناة
+                    const nameMatch = line.split(',');
+                    currentChannel.name = nameMatch[1] ? nameMatch[1].trim() : 'قناة غير مسماة';
+                    
+                    // استخراج الفئة (Group Title)
+                    const groupMatch = line.match(/group-title="([^"]+)"/);
+                    currentChannel.category = groupMatch ? groupMatch[1] : 'عامة';
+                } else if (line.startsWith('http') && currentChannel) {
+                    currentChannel.url = line;
+                    parsedChannels.push(currentChannel);
+                    currentChannel = null; // إعادة تعيين
                 }
-            } catch (e) {
-                console.error("خطأ في قراءة البيانات", e);
-                channels = [...defaultChannels];
             }
+            return parsedChannels;
         }
 
+        // قراءة الملف عند رفعه
+        document.getElementById('playlistFile').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                channels = parseM3U(content);
+                
+                if (channels.length > 0) {
+                    renderChannels();
+                    playChannel(channels[0].url); // تشغيل أول قناة تلقائياً
+                } else {
+                    alert('لم يتم العثور على قنوات صالحة في هذا الملف.');
+                }
+            };
+            reader.readAsText(file);
+        });
+
+        // دالة بناء وعرض القنوات في الصفحة
         function renderChannels() {
             const container = document.getElementById('channelsList');
-            if (!container) return;
-            
             container.innerHTML = '';
-            channels.forEach(channel => {
+
+            if(channels.length === 0) {
+                container.innerHTML = `<p id="emptyNotice" class="text-[var(--text-secondary)] text-sm col-span-full text-center py-8">يرجى رفع ملف البلاي ليست الخاص بك (.m3u) من الخانة أعلاه لعرض القنوات.</p>`;
+                return;
+            }
+
+            channels.forEach((channel, index) => {
                 const card = document.createElement('div');
                 card.className = "bg-[var(--bg-primary)] p-3 rounded-lg cursor-pointer border border-white/10 hover:border-[var(--accent-purple)] transition flex flex-col items-center text-center";
                 card.onclick = () => playChannel(channel.url);
                 
                 card.innerHTML = `
-                    <img src="${channel.logo || 'https://via.placeholder.com/100'}" alt="${channel.name}" class="w-16 h-16 object-cover rounded-lg mb-2">
+                    <img src="${channel.logo}" alt="${channel.name}" class="w-16 h-16 object-cover rounded-lg mb-2">
                     <h3 class="font-medium text-sm text-white">${channel.name}</h3>
                     <span class="text-xs text-[var(--text-secondary)] mt-1">${channel.category}</span>
                 `;
@@ -119,30 +140,20 @@
             });
         }
 
+        // دالة تشغيل الفيديو
         function playChannel(url) {
             const video = document.getElementById('videoPlayer');
+            
             if (Hls.isSupported()) {
                 const hls = new Hls();
                 hls.loadSource(url);
                 hls.attachMedia(video);
-                video.play().catch(e => console.log("الرجاء الضغط على تشغيل الفيديو يدوياً", e));
+                video.play().catch(e => console.log("انقر فوق القناة للتشغيل", e));
             } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                 video.src = url;
-                video.play().catch(e => console.log("الرجاء الضغط على تشغيل الفيديو يدوياً", e));
+                video.play().catch(e => console.log("انقر فوق القناة للتشغيل", e));
             }
         }
-
-        function init() {
-            loadChannels();
-            renderChannels();
-            // تشغيل أول قناة افتراضياً بشكل تجريبي
-            if (channels.length > 0) {
-                playChannel(channels[0].url);
-            }
-        }
-
-        // تشغيل الكود بمجرد تحميل الصفحة بالكامل
-        window.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
 </html>
